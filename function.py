@@ -13,7 +13,6 @@ def func(a, b, c):
 		c = 1
 	else:
 		b =  100
-
 	rt = b + c
 	return rt
 

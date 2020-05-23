@@ -1,31 +1,38 @@
 def func(a, b, c):
-    print abs(a - 1 - 0)
+    fffff = open('fitness', 'w')
+    ttttt = abs(a - 1 - 0)
+    fffff.write('{} {} {}\n'.format(0, 0, ttttt))
     if a - 1 == 0:
         b = a - c
     else:
-        print -abs(a - 0)
+        ttttt = -abs(a - 0)
+        fffff.write('{} {} {}\n'.format(1, 1, ttttt))
         if a != 0:
             c = 1
         else:
-            print c - 1
+            ttttt = c - 1
+            fffff.write('{} {} {}\n'.format(2, 2, ttttt))
             if c < 1:
                 a = 1
             else:
-                print 1 - c
+                ttttt = 1 - c
+                fffff.write('{} {} {}\n'.format(3, 2, ttttt))
                 if c > 1:
                     b = 1
                 else:
-                    print c - 1
+                    ttttt = c - 1
+                    fffff.write('{} {} {}\n'.format(4, 3, ttttt))
                     if c <= 1:
                         b = 1
                     else:
-                        print 1 - c
+                        ttttt = 1 - c
+                        fffff.write('{} {} {}\n'.format(5, 3, ttttt))
                         if c >= 1:
                             c = 1
                         else:
                             b = 100
-    rt = b + c
-    return rt
+	rt = b + c
+	return rt
 
 
 print func(-1, 2, 3)

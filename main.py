@@ -20,20 +20,20 @@ def find_num(node):
 
     return rt
 
-# Find ast.Name node
-def find_name(node):
+# Maximum length of names
+def name_len(node):
     if isinstance(node, ast.Name):
-        return [node.id]
+        return len(node.id)
     
-    rt = []
+    rt = 0
     
     try:
         for value in node.__dict__.values():
-            rt.extend(find_name(value))
+            rt = max(rt, name_len(value))
     except AttributeError:
         if isinstance(node, list):
             for child in node:
-                rt.extend(find_name(child))
+                rt = max(rt, name_len(child))
 
     return rt
 
@@ -74,24 +74,22 @@ class branch:
 	br_list = []
 	
 	# parent: index of parent, op_type:
-	def __init__(self, parent, op_type):
+	def __init__(self, parent, op_type, lineno):
 		self.ind = len(branch.br_list)
 		self.parent = parent
 		self.op_type = op_type
-		self.child = 0
+		self.lineno = lineno
 
 		branch.br_list.append(self)
-		if parent != -1:
-			branch.br_list[parent].child += 1
 
 
 # Find branch of code from function body ast
-def find_if(body, parent):
+def find_if(body, parent, temp_name, file_name):
 	try:
 		if 'body' in body.__dict__:
-			find_if(body.body, parent)
-		if 'orelse' in body.__dict__:
-			find_if(body.orelse, parent)
+			find_if(body.body, parent, temp_name, file_name)
+		'''if 'orelse' in body.__dict__:
+			find_if(body.orelse, parent)'''
 
 	except AttributeError:
 		if isinstance(body, list):
@@ -102,11 +100,32 @@ def find_if(body, parent):
 
 				if isinstance(line, ast.If):
 					op_type, node = branch_dist(line.test)
-					body.insert(ind, ast.Print(dest=None, values=[node], nl=True))
-					new_branch = branch(parent, op_type)
-					ind += 1
+					new_branch = branch(parent, op_type, line.lineno)
 
-				find_if(line, parent)
+					body.insert(ind, ast.Assign(targets=[ast.Name(id=temp_name)],
+												value=node))
+
+					body.insert(ind + 1, ast.Expr(value=ast.Call(func=ast.Attribute(value=ast.Name(id=file_name),
+																					attr='write'),
+													args=[ast.Call(func=ast.Attribute(value=ast.Str(s='{} {} {}\n'),
+																						attr='format'),
+																	args=[ast.Num(n=new_branch.ind),
+																			ast.Num(n=op_type),
+																			ast.Name(id=temp_name)],
+																	keywords=[],
+																	starargs=None,
+																	kwargs=None)],
+													keywords=[],
+													starargs=None,
+													kwargs=None)))
+
+					find_if(line.body, new_branch.ind, temp_name, file_name)
+					find_if(line.orelse, parent, temp_name, file_name)
+					#new_branch = branch(parent, op_type)
+					ind += 2
+
+				else:
+					find_if(line, parent, temp_name, file_name)
 				ind += 1
 
 
@@ -126,11 +145,34 @@ if __name__ == "__main__":
 	root = astor.code_to_ast.parse_file(sys.argv[1])
 	func = root.body[0]
 	
-	find_if(func.body, -1)
+	# Apply not used variable name for output file and temp var
+	var_len = name_len(root) + 1
+	file_name = 'f' * var_len
+	temp_name = 't' * var_len
+	
+	# Open file(branch fitness that will save fitness values
+	func.body.insert(0, ast.Assign(targets=[ast.Name(id=file_name)],
+									value=ast.Call(func=ast.Name(id='open'),
+													args=[ast.Str(s='fitness'), ast.Str(s='w')],
+													keywords=[],
+													starargs=None,
+													kwargs=None)))
+	
+	# Blueprint for writing fitness value
+	# Only need to change write_func.args
+	write_func = ast.Expr(value=ast.Call(func=ast.Attribute(value=ast.Name(id=file_name), attr='write'),
+											args=[ast.Str(s='example')],
+											keywords=[],
+											starargs=None,
+											kwargs=None))
+
+	find_if(func.body, -1, temp_name, file_name)
 	
 	print(astor.dump_tree(func))
 	code = astor.to_source(root)
 	source_file = open('branch_dist_print.py', 'w')
 	source_file.write(code)
-	print(find_name(func))
+	
+	from branch_dist_print import *
+
 	gen_input(func, 10)
