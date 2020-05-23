@@ -37,51 +37,77 @@ def find_name(node):
 
     return rt
 
-# Comparators used for if statements
-comp_op = [ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE]
 
 # Get branch distance for given if statement
+# 0(==), 1(<), 2(+K<), 3(+k<=)
 def branch_dist(test):
 	if isinstance(test.ops[0], ast.Eq):
-		return ast.Call(func=ast.Name(id='abs'),
-						args=[ast.BinOp(left=test.left, op=ast.Sub(), right=test.comparators[0])],
-						keywords=[],
-						starags=None,
-						kwargs=None)
+		return 0, ast.Call(func=ast.Name(id='abs'),
+							args=[ast.BinOp(left=test.left, op=ast.Sub(), right=test.comparators[0])],
+							keywords=[],
+							starags=None,
+							kwargs=None)
 	
 	elif isinstance(test.ops[0], ast.NotEq):
-		return ast.UnaryOp(op=ast.USub(),
-							operand=ast.Call(func=ast.Name(id='abs'),
-												args=[ast.BinOp(left=test.left, op=ast.Sub(),
-														right=test.comparators[0])],
-												keywords=[],
-												starags=None,
-												kwargs=None))
+		return 1, ast.UnaryOp(op=ast.USub(),
+								operand=ast.Call(func=ast.Name(id='abs'),
+													args=[ast.BinOp(left=test.left, op=ast.Sub(),
+															right=test.comparators[0])],
+													keywords=[],
+													starags=None,
+													kwargs=None))
 	
-	elif isinstance(test.ops[0], ast.Lt) or isinstance(test.ops[0], ast.LtE):
-		return ast.BinOp(left=test.left, op=ast.Sub(), right=test.comparators[0])
-	
-	elif isinstance(test.ops[0], ast.Gt) or isinstance(test.ops[0], ast.GtE):
-		return ast.BinOp(left=test.comparators[0], op=ast.Sub(), right=test.left)
+	elif isinstance(test.ops[0], ast.Lt):
+		return 2, ast.BinOp(left=test.left, op=ast.Sub(), right=test.comparators[0])
 
+	elif isinstance(test.ops[0], ast.LtE):
+		return 3, ast.BinOp(left=test.left, op=ast.Sub(), right=test.comparators[0])
+	
+	elif isinstance(test.ops[0], ast.Gt):
+		return 2, ast.BinOp(left=test.comparators[0], op=ast.Sub(), right=test.left)
+
+	elif isinstance(test.ops[0], ast.GtE):
+		return 3, ast.BinOp(left=test.comparators[0], op=ast.Sub(), right=test.left)
+
+
+class branch:
+	br_list = []
+	
+	# parent: index of parent, op_type:
+	def __init__(self, parent, op_type):
+		self.ind = len(branch.br_list)
+		self.parent = parent
+		self.op_type = op_type
+		self.child = 0
+
+		branch.br_list.append(self)
+		if parent != -1:
+			branch.br_list[parent].child += 1
 
 
 # Find branch of code from function body ast
-def find_if(body):
-	body.insert(0, ast.Print(dest=None, values=[ast.Num(n=1)], nl=True))
-	ind = 0
+def find_if(body, parent):
+	try:
+		if 'body' in body.__dict__:
+			find_if(body.body, parent)
+		if 'orelse' in body.__dict__:
+			find_if(body.orelse, parent)
 
-	while ind < len(body):
-		line = body[ind]
+	except AttributeError:
+		if isinstance(body, list):
+			ind = 0
 
-		if isinstance(line, ast.If):
-			body.insert(ind, ast.Print(dest=None,
-										values=[branch_dist(line.test)],
-										nl=True))
-			find_if(line.orelse)
-			ind += 1
+			while ind in range(len(body)):
+				line = body[ind]
 
-		ind += 1
+				if isinstance(line, ast.If):
+					op_type, node = branch_dist(line.test)
+					body.insert(ind, ast.Print(dest=None, values=[node], nl=True))
+					new_branch = branch(parent, op_type)
+					ind += 1
+
+				find_if(line, parent)
+				ind += 1
 
 
 
@@ -96,31 +122,15 @@ def gen_input(func, num):
     print(rand.random())
     
 
-'''tree = astor.code_to_ast.parse_file("function.py")
-tree = tree.body[1]
-dump = astor.dump_tree(tree)
-print(tree.args.args)
-find_if(tree.body)
-
-for ind, item in enumerate(tree.body):
-    print(item.__dict__)
-    if isinstance(item, ast.If):
-        print(ind, item)
-
-print(len(tree.args.args))
-print(type(tree))
-print(dump)'''
-
 if __name__ == "__main__":
 	root = astor.code_to_ast.parse_file(sys.argv[1])
 	func = root.body[0]
 	
-	find_if(func.body)
+	find_if(func.body, -1)
 	
 	print(astor.dump_tree(func))
-	func.body.insert(0, ast.Assign(targets=[ast.Name(id='b')], value=ast.Num(n=3)))
 	code = astor.to_source(root)
-	source_file = open('test.py', 'w')
+	source_file = open('branch_dist_print.py', 'w')
 	source_file.write(code)
 	print(find_name(func))
 	gen_input(func, 10)
