@@ -1,8 +1,6 @@
-import ast
-import astor
+import ast, astor
+import sys, os, copy, math
 import random as rand
-import sys
-import copy
 from ast_helper import find_num, find_if, name_len, branch
 from ga_helper import pop_sel, mutate
 
@@ -10,7 +8,7 @@ from ga_helper import pop_sel, mutate
 def gen_input(func):
 	rt = []
 	arg_num = len(func.args.args)
-	special = list(set(find_num(func.body).extend([0, 1, -1])))
+	special = list(set(find_num(func.body) + [0, 1, -1]))
 	
 	for i in range(p):
 		inp = []
@@ -19,7 +17,7 @@ def gen_input(func):
 			if rand.random() <= 0.2:
 				inp.append(rand.choice(special))
 			else:
-				inp.append(rand.randint(-10000, 10000))
+				inp.append(rand.randint(-100, 100))
 		
 		rt.append(inp)
 
@@ -84,16 +82,23 @@ def get_result(leaf_index):
 		
 	return br_cov
 
-# Main part tests, evolves test cases
-def test_main(root, ind):
-	func = root.body[ind]
+# Helps to suppress print
+class HiddenPrint:
+	def __enter__(self):
+		self._original_stdout = sys.stdout
+		sys.stdout = open(os.devnull, 'w')
+	
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		sys.stdout.close()
+		sys.stdout = self._original_stdout
 
+# Main part tests, evolves test cases
+def test_main(func):
 	if not isinstance(func, ast.FunctionDef):
 		return
 
 	func_name = func.name
-
-	#gen_input(func)
+	new_test = gen_input(func)
 
 	# Open file(branch fitness that will save fitness values
 	func.body.insert(0, ast.Assign(targets=[ast.Name(id=file_name)],
@@ -103,6 +108,7 @@ def test_main(root, ind):
 													starargs=None,
 													kwargs=None)))
 
+	branch.br_list = [None]
 	find_if(func.body, 0, temp_name, file_name)
 
 	# Write changed code on new file
@@ -144,13 +150,14 @@ def test_main(root, ind):
 	output = []
 
 	# New test cases and outputs generated
-	new_test = [[3, 2, 3], [1, 2, 3], [3, 2, 1], [0, 0, 0]]
 	new_output = []
 	rt_test = {}
 	
 	for i in range(gen):
+		print(i, leaf_index.keys())
 		for inp in new_test:
-			method(*inp)
+			with HiddenPrint():
+				method(*inp)
 			new_output.append((inp, get_result(leaf_index)))
 
 		# Look for leaf node that answer is found
@@ -165,8 +172,9 @@ def test_main(root, ind):
 						return rt_test
 
 		output.extend(new_output)
-		print(output, leaf_index.keys())
-		output = pop_sel(output, leaf_index.keys(), 1)
+		output = pop_sel(output, leaf_index.keys(), p)
+
+		new_test = []
 
 		for j in range(p):
 			# Index of leaf to optimize
@@ -191,14 +199,14 @@ def test_main(root, ind):
 				new_test.append(mutate(pair[0][0]))
 
 			else:
-				child = [math.ceil((pair[0][0][ind] * (score2 + 1) - pair[1][0][ind] * (score1 + 1)) / (score2 - score1))
-							for l in range(len(pair[0][0]))]
+				child = [int(math.ceil((pair[0][0][k] * (score2 + 1) - pair[1][0][k] * (score1 + 1)) / (score2 - score1))) for k in range(len(pair[0][0]))]
 
 				if rand.random() <= 0.2:
 					child = mutate(child)
 
 				new_test.append(child)
 
+	print(rt_test)
 	return rt_test
 
 if __name__ == "__main__":
@@ -212,5 +220,7 @@ if __name__ == "__main__":
 	p = 10
 	k = 1
 	gen = 1000
-	test_main(root, 0)
+	
+	for func in root.body:
+		test_main(func)
 	

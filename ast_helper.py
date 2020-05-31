@@ -92,6 +92,10 @@ class branch:
 			branch.br_list[-parent].false = True
 
 		branch.br_list.append(self)
+	
+	def reset():
+		br_list.clear()
+		br_list.append(None)
 
 
 # Find branch of code from function body ast

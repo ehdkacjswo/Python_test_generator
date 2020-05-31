@@ -1,2 +1,3 @@
 python main.py function.py
+rm -r *.pyc
 

@@ -1,11 +1,31 @@
 import numpy as np
 import random as rand
 
-def crowd_sel(output, p):
+def crowd_sel(group, leaf_index, p):
 	if p == 0:
 		return []
 	
+	# (index of original group, crowd distance, number of inf)
+	ind_group = [[i, 0, 0] for i in range(len(group))]
+	
+	for leaf_ind in leaf_index:
+		ind_group.sort(key=lambda test: group[test[0]][1][leaf_ind])
 
+		# Set infinite
+		ind_group[0][2] += 1
+		ind_group[-1][2] += 1
+
+		for i in range(1, len(ind_group) - 1):
+			# Crowding distance
+			ind_group[i][1] += group[ind_group[i + 1][0]][1][leaf_ind] - group[ind_group[i - 1][0]][1][leaf_ind]
+	
+	ind_group.sort(key=lambda crowd: crowd[2] + crowd[1] / (crowd[1] + 1), reverse=True)
+	
+	rt = []
+	for i in range(p):
+		rt.append(group[ind_group[i][0]])
+	
+	return rt
 
 # 0: test1 dominates, 1: test2 dominates, 2: non-dominating
 def dom(test1, test2, leaf_index):
@@ -13,10 +33,10 @@ def dom(test1, test2, leaf_index):
 	dom1 = False
 	dom2 = False
 
-	for key in leaf_index:
-		if test1[key] > test2[key]:
+	for leaf_ind in leaf_index:
+		if test1[leaf_ind] > test2[leaf_ind]:
 			dom2 = True
-		elif test2[key] > test1[key]:
+		elif test2[leaf_ind] > test1[leaf_ind]:
 			dom1 = True
 
 		if dom1 and dom2:
@@ -94,17 +114,14 @@ def pop_sel(output, leaf_index, p):
 			p -= len(group)
 		
 		else:
-			rt.extend(crowd_sel(group, p))
+			rt.extend(crowd_sel(group, leaf_index, p))
 			break
 
-
-	return nd_sort
-
+	return rt
 
 
 # Mutate given input
 def mutate(output):
-	print('mutate', output)
 	change = 0
 
 	for ind in range(len(output)):
@@ -121,5 +138,3 @@ def mutate(output):
 		return mutate(output)
 	
 	return output
-
-pop_sel([([], {0: 1, 1: 1}), ([], {0: 0, 1: 2}), ([], {0: 1, 1: 2}), ([], {0: 2 , 1: 2}), ([], {0: -1, 1: -1})], [0, 1], 2)

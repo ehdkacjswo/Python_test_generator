@@ -6,11 +6,6 @@ def func(a, b, c):
 	elif b > 0:
 		if c < 0:
 			return 2
-		else:
-			if b < 0:
-				return 4
-			else:
-				return 3
 
 
 def f(a):
