@@ -1,16 +1,12 @@
 Function found (test_me)
-4 branches found
+2 branches found
 
 Branch #1 on line 3
-Branch #2 on line 5
-Branch #3 on line 15
-Branch #4 on line 17
-Leaf branches: 1F 2T 2F 3F 4T 4F
+Branch #2 on line 11
+Leaf branches: 1T 1F 2T 2F
 
-Test case for {} is found
-Test case for {} is found
-Test case for {} is found
-Test case for {} is found
-Test case for {} is found
-Test case for {} is found
+Test case for 2T is found on 1th gen
+Test case for 2F is found on 1th gen
+Test case for 1F is found on 1th gen
+Test case for 1T is found on 2th gen
 Every tests ares found!

@@ -132,9 +132,21 @@ def find_if(body, parent, temp_name, file_name):
 													keywords=[],
 													starargs=None,
 													kwargs=None)))
-
+					
 					find_if(line.body, new_branch.ind, temp_name, file_name)
 					find_if(line.orelse, -new_branch.ind, temp_name, file_name)
+
+					'''# If branch is empty, no reason to consider it
+					if line.body:
+						find_if(line.body, new_branch.ind, temp_name, file_name)
+					else:
+						new_branch.true = True
+
+					if line.orelse:
+						find_if(line.orelse, -new_branch.ind, temp_name, file_name)
+					else:
+						new_branch.false = True'''
+					
 					ind += 2
 
 				else:

@@ -2,7 +2,7 @@ import ast, astor
 import sys, os, copy, math
 import random as rand
 from ast_helper import find_num, find_if, name_len, branch
-from ga_helper import pop_sel, mutate
+from ga_helper import mutate, in_test, add_test
 
 # Generarte input from function ast
 def gen_input(func):
@@ -10,7 +10,7 @@ def gen_input(func):
 	arg_num = len(func.args.args)
 	special = list(set(find_num(func.body) + [0, 1, -1]))
 	
-	for i in range(p):
+	while len(rt) < p:
 		inp = []
 		
 		for j in range(arg_num):
@@ -19,7 +19,7 @@ def gen_input(func):
 			else:
 				inp.append(rand.randint(-100, 100))
 		
-		rt.append(inp)
+		rt = add_test(rt, inp)
 
 	return special, rt
 
@@ -99,21 +99,6 @@ def test_main(root_copy, body_ind):
 
 	branch.br_list = [None]
 	find_if(func.body, 0, temp_name, file_name)
-
-	'''# Open file(branch fitness that will save fitness values
-	func.body.insert(0, ast.Assign(targets=[ast.Name(id=file_name)],
-									value=ast.Call(func=ast.Name(id='open'),
-													args=[ast.Str(s='fitness'), ast.Str(s='w')],
-													keywords=[],
-													starargs=None,
-													kwargs=None)))
-	
-	# Close file
-	func.body.append(ast.Expr(value=ast.Call(func=ast.Attribute(value=ast.Name(id=file_name), attr='close'),
-												args=[],
-												keywords=[],
-												starargs=None,
-												kwargs=None)))'''
 	
 	func.args.args.insert(0, ast.Name(id=file_name))
 	out_res.write('{} branches found\n\n'.format(len(branch.br_list) - 1))
@@ -193,7 +178,7 @@ def test_main(root_copy, body_ind):
 				if new_output[-1][1][leaf_ind] < 0:
 					rt_test[leaf_ind] = copy.deepcopy(inp)
 					del leaf_index[leaf_ind]
-					out_res.write('Test case for {} is found\n')
+					out_res.write('Test case for {} is found on {}th gen\n'.format(tf_br(leaf_ind), i + 1))
 					
 					if not bool(leaf_index):
 						out_res.write('Every tests ares found!\n')
@@ -207,12 +192,14 @@ def test_main(root_copy, body_ind):
 			break
 
 		new_test = []
+		last_test_num = 0
 
 		for leaf_ind in leaf_index:
 			output[leaf_ind].extend(new_output)
 			output[leaf_ind] = sorted(output[leaf_ind], key=lambda data: data[1][leaf_ind])[:p]
+			print(leaf_ind, [(out[0], out[1][leaf_ind]) for out in output[leaf_ind]])
 
-			for j in range(p):
+			while len(new_test) - last_test_num < p:
 				pair = []
 					
 				for k in range(2):
@@ -226,23 +213,33 @@ def test_main(root_copy, body_ind):
 					else:
 						pair.append(rand.choice([p1, p2]))
 
+				if pair[0][0] == pair[1][0]:
+					continue
+
 				score1 = pair[0][1][leaf_ind]
 				score2 = pair[1][1][leaf_ind]
+
+				children = []
+
+				if len(pair[0][0]) > 1:
+					cross_point = rand.randint(1, len(pair[0][0]) - 1)
+
+					children.append(pair[0][0][:cross_point] + pair[1][0][cross_point:])
+					children.append(pair[1][0][:cross_point] + pair[0][0][cross_point:])
 			
-				if score1 == score2:
-					new_test.append(mutate(pair[0][0], special))
+				if score1 != score2:
+					children.append([int(math.ceil((pair[0][0][k] * (score2 + 1) - pair[1][0][k] * (score1 + 1)) / (score2 - score1))) for k in range(len(pair[0][0]))])
 
-				else:
-					child = [int(math.ceil((pair[0][0][k] * (score2 + 1) - pair[1][0][k] * (score1 + 1)) / (score2 - score1))) for k in range(len(pair[0][0]))]
-
-					if rand.random() <= 0.2:
+				for child in children:
+					if rand.random() < 0.2 or child == pair[0][0] or child == pair[1][0]:
 						child = mutate(child, special)
 
-					new_test.append(child)
-	
+					if not in_test([out[0] for out in output[leaf_ind]], child):
+						new_test = add_test(new_test, child)
 
-	print(rt_test)
-	print(leaf_index.keys())
+			last_test_num = len(new_test)
+
+
 	return rt_test
 
 if __name__ == "__main__":
@@ -257,6 +254,7 @@ if __name__ == "__main__":
 	out_res = open('branch_test', 'w')
 
 	p = 10
+	pm = 0.2
 	gen = 1000
 	
 	for ind in range(len(root.body)):
