@@ -25,7 +25,7 @@ def gen_input(func):
 
 
 # Analyze the fitness output
-def get_result(lvl_dict):
+def get_result(leaf_index):
 	f = open("fitness", "r")
 	br_data = f.readlines()
 	f.close()
@@ -50,26 +50,27 @@ def get_result(lvl_dict):
 			if item is None or item > tup[1]:
 				br_dict[tup[0]] = tup[1]
 		
-	cur_cov = len(lvl_dict) + 2
+	br_fit = {}
 
 	# 
-	for ind, lvl in sorted(lvl_dict.items(), key=lambda tup: tup[1]):
-		dist = br_dict.get(ind)
+	for leaf_ind, lvl_dict in leaf_index.items():
+		for ind, lvl in sorted(lvl_dict.items(), key=lambda tup: tup[1]):
+			dist = br_dict.get(ind)
 
-		if dist is not None:
-			if dist >= 0:
-				br_cov = lvl + float(dist) / (dist + 1)
-				break
-
-			if dist < 0:
-				if lvl == 0:
-					br_cov = -1
+			if dist is not None:
+				if dist >= 0:
+					br_fit[leaf_ind] = lvl + float(dist) / (dist + 1)
 					break
-				else:
-					# Cannot reach
-					print('hello')
-		
-	return br_cov
+
+				if dist < 0:
+					if lvl == 0:
+						br_fit[leaf_ind] = -1
+						break
+					else:
+						# Cannot reach
+						print('hello')
+	
+	return br_fit
 
 # Helps to suppress print
 class HiddenPrint:
@@ -99,7 +100,7 @@ def test_main(root_copy, body_ind):
 	branch.br_list = [None]
 	find_if(func.body, 0, temp_name, file_name)
 
-	# Open file(branch fitness that will save fitness values
+	'''# Open file(branch fitness that will save fitness values
 	func.body.insert(0, ast.Assign(targets=[ast.Name(id=file_name)],
 									value=ast.Call(func=ast.Name(id='open'),
 													args=[ast.Str(s='fitness'), ast.Str(s='w')],
@@ -112,8 +113,9 @@ def test_main(root_copy, body_ind):
 												args=[],
 												keywords=[],
 												starargs=None,
-												kwargs=None)))
-
+												kwargs=None)))'''
+	
+	func.args.args.insert(0, ast.Name(id=file_name))
 	out_res.write('{} branches found\n\n'.format(len(branch.br_list) - 1))
 	
 	# No branches found
@@ -155,68 +157,77 @@ def test_main(root_copy, body_ind):
 				neg_dict[-cur_br.ind] = 0
 				leaf_index[-cur_br.ind] = neg_dict
 	
-	# Print leaf branches
+	# Branch fitness output with(test, output)
+	output = {}
+
+	# Print leaf branches and init output
 	out_res.write('Leaf branches:')
 
 	for leaf_ind in sorted(leaf_index.keys(), key=lambda ind: abs(ind) * 2 + (1 if ind < 0 else 0)):
 		out_res.write(' {}'.format(tf_br(leaf_ind)))
+		output[leaf_ind] = []
 	
 	out_res.write('\n\n')
 	
 	import branch_dist_print
 	method = getattr(branch_dist_print, func_name)
 	
-	# Branch fitness output with (test, output)
-	output = []
+	# Tests that cover each leaves
 	rt_test = {}
-	
-	for leaf_ind in leaf_index.keys():
-		#Wheter the solution found
-		sol_found = False
+	sol_found = False
 
-		print(leaf_ind)
+	for i in range(gen):
+		new_output = []
+		print(i, leaf_index.keys())
 
-		for i in range(gen):
-			new_output = []
+		for inp in new_test:
+			f = open('fitness', 'w')
+			with HiddenPrint():
+				method(f, *inp)
+			f.close()
 
-			for inp in new_test:
-				with HiddenPrint():
-					method(*inp)
-
-				new_output.append((inp, get_result(leaf_index[leaf_ind])))
+			new_output.append((inp, get_result(leaf_index)))
 				
-				# Check whether the solution is found
-				if new_output[-1][1] < 0:
-					sol_found = True
+			# Check whether the solution is found
+			for leaf_ind in leaf_index:
+				if new_output[-1][1][leaf_ind] < 0:
 					rt_test[leaf_ind] = copy.deepcopy(inp)
+					del leaf_index[leaf_ind]
 					out_res.write('Test case for {} is found\n')
+					
+					if not bool(leaf_index):
+						out_res.write('Every tests ares found!\n')
+						sol_found = True
 					break
 
 			if sol_found:
 				break
 
-			output.extend(new_output)
-			output = sorted(output, key=lambda data: data[1])[:p]
-			print(output)
+		if sol_found:
+			break
 
-			new_test = []
+		new_test = []
+
+		for leaf_ind in leaf_index:
+			output[leaf_ind].extend(new_output)
+			output[leaf_ind] = sorted(output[leaf_ind], key=lambda data: data[1][leaf_ind])[:p]
 
 			for j in range(p):
 				pair = []
 					
 				for k in range(2):
-					p1 = rand.choice(output)
-					p2 = rand.choice(output)
+					p1 = rand.choice(output[leaf_ind])
+					p2 = rand.choice(output[leaf_ind])
 
-					if p1[1] < p2[1]:
+					if p1[1][leaf_ind] < p2[1][leaf_ind]:
 						pair.append(p1)
-					elif p1[1] > p2[1]:
+					elif p1[1][leaf_ind] > p2[1][leaf_ind]:
 						pair.append(p2)
 					else:
 						pair.append(rand.choice([p1, p2]))
 
-				score1 = pair[0][1]
-				score2 = pair[1][1]
+				score1 = pair[0][1][leaf_ind]
+				score2 = pair[1][1][leaf_ind]
 			
 				if score1 == score2:
 					new_test.append(mutate(pair[0][0], special))
