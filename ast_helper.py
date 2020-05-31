@@ -76,6 +76,7 @@ class branch:
 	# parent: index of parent, op_type:
 	def __init__(self, parent, op_type, lineno):
 		self.ind = len(branch.br_list)
+		self.lineno = lineno
 
 		# Ind of parent(if on true branch positive, elsewise negative)
 		self.parent = parent
@@ -92,10 +93,6 @@ class branch:
 			branch.br_list[-parent].false = True
 
 		branch.br_list.append(self)
-	
-	def reset():
-		br_list.clear()
-		br_list.append(None)
 
 
 # Find branch of code from function body ast
@@ -103,8 +100,8 @@ def find_if(body, parent, temp_name, file_name):
 	try:
 		if 'body' in body.__dict__:
 			find_if(body.body, parent, temp_name, file_name)
-		'''if 'orelse' in body.__dict__:
-			find_if(body.orelse, parent)'''
+		if 'orelse' in body.__dict__:
+			find_if(body.orelse, parent, temp_name, file_name)
 
 	except AttributeError:
 		if isinstance(body, list):

@@ -21,13 +21,14 @@ def gen_input(func):
 		
 		rt.append(inp)
 
-	return rt
+	return special, rt
 
 
 # Analyze the fitness output
-def get_result(leaf_index):
+def get_result(lvl_dict):
 	f = open("fitness", "r")
 	br_data = f.readlines()
+	f.close()
 
 	# Maps branch id to branch distance
 	# Positive id : true branch, Negative id : false branch
@@ -36,20 +37,12 @@ def get_result(leaf_index):
 
 	for data in br_data:
 		br_id, br_type, br_dist = [int(x) for x in data.split(" ")]
-
-		# For Eq and NotEq, don't normalize
-		if br_type < 2:
-			if (br_type == 0 and br_dist <= 0) or (br_type == 1 and br_dist < 0):
-				new_data = [(br_id, -1), (-br_id, -br_dist)]
-			else:
-				new_data = [(br_id, br_dist), (-br_id, -1)]
-			
-		# For others, nomarlize the distance
+		
+		# When branch is passed, make fitness negative
+		if (br_type % 2 == 0 and br_dist <= 0) or (br_type % 2 == 1 and br_dist < 0):
+			new_data = [(br_id, -1), (-br_id, -br_dist)]
 		else:
-			if (br_type % 2 == 0 and br_dist <= 0) or (br_type % 2 == 1 and br_dist < 0):
-				new_data = [(br_id, -1), (-br_id, -br_dist + k)]
-			else:
-				new_data = [(br_id, br_dist + k), (-br_id, -1)]
+			new_data = [(br_id, br_dist), (-br_id, -1)]
 
 		for tup in new_data:
 			item = br_dict.get(tup[0])
@@ -57,28 +50,24 @@ def get_result(leaf_index):
 			if item is None or item > tup[1]:
 				br_dict[tup[0]] = tup[1]
 		
-	# Branch coverage for every leaves
-	br_cov = {}
+	cur_cov = len(lvl_dict) + 2
 
-	for leaf_ind, lvl_dict in leaf_index.items():
-		cur_cov = len(lvl_dict) + 2
+	# 
+	for ind, lvl in sorted(lvl_dict.items(), key=lambda tup: tup[1]):
+		dist = br_dict.get(ind)
 
-		# 
-		for ind, lvl in sorted(lvl_dict.items(), key=lambda tup: tup[1]):
-			dist = br_dict.get(ind)
+		if dist is not None:
+			if dist >= 0:
+				br_cov = lvl + float(dist) / (dist + 1)
+				break
 
-			if dist is not None:
-				if dist >= 0:
-					br_cov[leaf_ind] = lvl + dist / (dist + 1)
+			if dist < 0:
+				if lvl == 0:
+					br_cov = -1
 					break
-
-				if dist < 0:
-					if lvl == 0:
-						br_cov[leaf_ind] = -1
-						break
-					else:
-						# Cannot reach
-						print('hello')
+				else:
+					# Cannot reach
+					print('hello')
 		
 	return br_cov
 
@@ -92,13 +81,23 @@ class HiddenPrint:
 		sys.stdout.close()
 		sys.stdout = self._original_stdout
 
+# Return string that 
+def tf_br(ind):
+	return '{}{}'.format(abs(ind), 'T' if ind > 0 else 'F')
+
 # Main part tests, evolves test cases
-def test_main(func):
+def test_main(root_copy, body_ind):
+	func = root_copy.body[body_ind]
+
 	if not isinstance(func, ast.FunctionDef):
 		return
 
 	func_name = func.name
-	new_test = gen_input(func)
+	out_res.write('Function found ({})\n'.format(func_name))
+	special, new_test = gen_input(func)
+
+	branch.br_list = [None]
+	find_if(func.body, 0, temp_name, file_name)
 
 	# Open file(branch fitness that will save fitness values
 	func.body.insert(0, ast.Assign(targets=[ast.Name(id=file_name)],
@@ -107,12 +106,25 @@ def test_main(func):
 													keywords=[],
 													starargs=None,
 													kwargs=None)))
+	
+	# Close file
+	func.body.append(ast.Expr(value=ast.Call(func=ast.Attribute(value=ast.Name(id=file_name), attr='close'),
+												args=[],
+												keywords=[],
+												starargs=None,
+												kwargs=None)))
 
-	branch.br_list = [None]
-	find_if(func.body, 0, temp_name, file_name)
+	out_res.write('{} branches found\n\n'.format(len(branch.br_list) - 1))
+	
+	# No branches found
+	if len(branch.br_list) == 1:
+		return
+	
+	for cur_br in branch.br_list[1:]:
+		out_res.write('Branch #{} on line {}\n'.format(cur_br.ind, cur_br.lineno))
 
 	# Write changed code on new file
-	code = astor.to_source(root)
+	code = astor.to_source(root_copy)
 	source_file = open('branch_dist_print.py', 'w')
 	source_file.write(code)
 	source_file.close()
@@ -143,84 +155,99 @@ def test_main(func):
 				neg_dict[-cur_br.ind] = 0
 				leaf_index[-cur_br.ind] = neg_dict
 	
+	# Print leaf branches
+	out_res.write('Leaf branches:')
+
+	for leaf_ind in sorted(leaf_index.keys(), key=lambda ind: abs(ind) * 2 + (1 if ind < 0 else 0)):
+		out_res.write(' {}'.format(tf_br(leaf_ind)))
+	
+	out_res.write('\n\n')
+	
 	import branch_dist_print
 	method = getattr(branch_dist_print, func_name)
 	
 	# Branch fitness output with (test, output)
 	output = []
-
-	# New test cases and outputs generated
-	new_output = []
 	rt_test = {}
 	
-	for i in range(gen):
-		print(i, leaf_index.keys())
-		for inp in new_test:
-			with HiddenPrint():
-				method(*inp)
-			new_output.append((inp, get_result(leaf_index)))
+	for leaf_ind in leaf_index.keys():
+		#Wheter the solution found
+		sol_found = False
 
-		# Look for leaf node that answer is found
-		for res in new_output:
-			for key, value in res[1].items():
-				if value < 0 and (key in leaf_index):
-					del leaf_index[key]
-					rt_test[key] = copy.deepcopy(res[0])
+		print(leaf_ind)
 
-					# Every leaves has solution
-					if not bool(leaf_index):
-						return rt_test
+		for i in range(gen):
+			new_output = []
 
-		output.extend(new_output)
-		output = pop_sel(output, leaf_index.keys(), p)
+			for inp in new_test:
+				with HiddenPrint():
+					method(*inp)
 
-		new_test = []
-
-		for j in range(p):
-			# Index of leaf to optimize
-			leaf_ind = rand.choice(leaf_index.keys())
-			pair = []
+				new_output.append((inp, get_result(leaf_index[leaf_ind])))
 				
-			for k in range(2):
-				p1 = rand.choice(output)
-				p2 = rand.choice(output)
+				# Check whether the solution is found
+				if new_output[-1][1] < 0:
+					sol_found = True
+					rt_test[leaf_ind] = copy.deepcopy(inp)
+					out_res.write('Test case for {} is found\n')
+					break
 
-				if p1[1][leaf_ind] < p2[1][leaf_ind]:
-					pair.append(p1)
-				elif p1[1][leaf_ind] > p2[1][leaf_ind]:
-					pair.append(p2)
-				else:
-					pair.append(rand.choice([p1, p2]))
+			if sol_found:
+				break
 
-			score1 = pair[0][1][leaf_ind]
-			score2 = pair[1][1][leaf_ind]
+			output.extend(new_output)
+			output = sorted(output, key=lambda data: data[1])[:p]
+			print(output)
+
+			new_test = []
+
+			for j in range(p):
+				pair = []
+					
+				for k in range(2):
+					p1 = rand.choice(output)
+					p2 = rand.choice(output)
+
+					if p1[1] < p2[1]:
+						pair.append(p1)
+					elif p1[1] > p2[1]:
+						pair.append(p2)
+					else:
+						pair.append(rand.choice([p1, p2]))
+
+				score1 = pair[0][1]
+				score2 = pair[1][1]
 			
-			if score1 == score2:
-				new_test.append(mutate(pair[0][0]))
+				if score1 == score2:
+					new_test.append(mutate(pair[0][0], special))
 
-			else:
-				child = [int(math.ceil((pair[0][0][k] * (score2 + 1) - pair[1][0][k] * (score1 + 1)) / (score2 - score1))) for k in range(len(pair[0][0]))]
+				else:
+					child = [int(math.ceil((pair[0][0][k] * (score2 + 1) - pair[1][0][k] * (score1 + 1)) / (score2 - score1))) for k in range(len(pair[0][0]))]
 
-				if rand.random() <= 0.2:
-					child = mutate(child)
+					if rand.random() <= 0.2:
+						child = mutate(child, special)
 
-				new_test.append(child)
+					new_test.append(child)
+	
 
 	print(rt_test)
+	print(leaf_index.keys())
 	return rt_test
 
 if __name__ == "__main__":
 	root = astor.code_to_ast.parse_file(sys.argv[1])
+	print(astor.dump_tree(root))
 	
 	# Apply not used variable name for output file and temp var
 	var_len = name_len(root) + 1
 	file_name = 'f' * var_len
 	temp_name = 't' * var_len
+	
+	out_res = open('branch_test', 'w')
 
 	p = 10
-	k = 1
 	gen = 1000
 	
-	for func in root.body:
-		test_main(func)
+	for ind in range(len(root.body)):
+		test_main(copy.deepcopy(root), ind)
 	

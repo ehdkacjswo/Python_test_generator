@@ -50,8 +50,8 @@ def dom(test1, test2, leaf_index):
 
 # Apply non dominated sorting and select by crowd distance
 def pop_sel(output, leaf_index, p):
-	'''if len(output) <= p:
-		return output'''
+	if len(output) <= p:
+		return output
 	
 	# Non dominated sort
 	nd_sort = [[output[0]]]
@@ -121,20 +121,25 @@ def pop_sel(output, leaf_index, p):
 
 
 # Mutate given input
-def mutate(output):
-	change = 0
+def mutate(output, special):
+	same = 0
 
 	for ind in range(len(output)):
-		if rand.random() <= 0.1:
+		prob = rand.random()
+		if prob <= 0.05:
 			output[ind] -= 1
-			change +=1
 
-		elif rand.random() <= 0.2:
+		elif prob <= 0.1:
 			output[ind] += 1
-			change += 1
+
+		elif prob <= 0.2:
+			output[ind] = rand.choice(special)
+
+		else:
+			same += 1
 	
 	# If none is changed, muteate again
-	if change == 0:
-		return mutate(output)
+	if same == len(output):
+		return mutate(output, special)
 	
 	return output

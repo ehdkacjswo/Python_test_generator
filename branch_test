@@ -1,0 +1,10 @@
+Function found (test_me)
+4 branches found
+
+Branch #1 on line 6
+Branch #2 on line 9
+Branch #3 on line 12
+Branch #4 on line 17
+Leaf branches: 1F 3T 3F 4T 4F
+
+Test case for {} is found
