@@ -17,7 +17,7 @@ def add_test(test_list, new_test):
 	return test_list + [new_test]
 
 # Mutate given input
-def mutate(test, special, pm):
+def mutate(test, special, pm, alpha, beta):
 	same = 0
 
 	for ind in range(len(test)):
@@ -26,7 +26,7 @@ def mutate(test, special, pm):
 			test[ind] = rand.choice(special)
 
 		elif prob <= pm:
-			add = int(math.floor(rand.gammavariate(1, 1))) + 1
+			add = int(math.floor(rand.gammavariate(alpha, beta))) + 1
 			sign = rand.choice([-1, 1])
 
 			test[ind] += sign * add
@@ -36,6 +36,6 @@ def mutate(test, special, pm):
 	
 	# If none is changed, muteate again
 	if same == len(test):
-		return mutate(test, special, pm)
+		return mutate(test, special, pm, alpha, beta)
 	
 	return test

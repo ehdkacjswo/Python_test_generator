@@ -9,8 +9,8 @@ def find_num(node):
 	rt = []
 
 	try:
-		for value in node.__dict__.values():
-			rt.extend(find_num(value))
+		for field in node._fields:
+			rt.extend(find_num(getattr(node, field)))
 	except AttributeError:
 		if isinstance(node, list):
 			for child in node:
@@ -20,20 +20,20 @@ def find_num(node):
 
 # Maximum length of names
 def name_len(node):
-    if isinstance(node, ast.Name):
-        return len(node.id)
+	if isinstance(node, str):
+		return len(node)
     
-    rt = 0
+	rt = 0
     
-    try:
-        for value in node.__dict__.values():
-            rt = max(rt, name_len(value))
-    except AttributeError:
-        if isinstance(node, list):
-            for child in node:
-                rt = max(rt, name_len(child))
-
-    return rt
+	try:
+		for field in node._fields:
+			rt = max(rt, name_len(getattr(node, field)))
+	except AttributeError:
+		if isinstance(node, list):
+			for child in node:
+				rt = max(rt, name_len(child))
+	
+	return rt
 
 # Get branch distance for given if statement
 # 0(Eq, LtE, GtE), 1(NotEq, Lt, Gt)
@@ -71,7 +71,7 @@ class branch:
 	br_list = [None]
 	
 	# parent: index of parent, op_type:
-	def __init__(self, parent, op_type, lineno):
+	def __init__(self, parent, op_type, lineno, reach):
 		self.ind = len(branch.br_list)
 		self.lineno = lineno
 
@@ -79,24 +79,28 @@ class branch:
 		self.parent = parent
 		self.op_type = op_type
 		
-		# Wheter it has child on true, false branch
+		# Whether it has child on true, false branch
 		self.true = False
 		self.false = False
+
+		# Whether it's rechable systatically
+		self.reach = reach
 		
-		# Add itself to parent's branch
-		if parent > 0:
-			branch.br_list[parent].true = True
-		elif parent < 0:
-			branch.br_list[-parent].false = True
+		# Add itself to parent's branch if reachable
+		if reach:
+			if parent > 0:
+				branch.br_list[parent].true = True
+			elif parent < 0:
+				branch.br_list[-parent].false = True
 
 		branch.br_list.append(self)
 
 
 # Find branch of code from function body ast
-def find_if(body, parent, temp_name, file_name):
+def find_if(body, parent, temp_name, file_name, reach):
 	try:
 		for field in body._fields:
-			find_if(getattr(body, field), parent, temp_name, file_name)
+			find_if(getattr(body, field), parent, temp_name, file_name, reach)
 
 	except AttributeError:
 		if isinstance(body, list):
@@ -105,9 +109,12 @@ def find_if(body, parent, temp_name, file_name):
 			while ind in range(len(body)):
 				line = body[ind]
 
-				if isinstance(line, ast.If) or isinstance(line, ast.While):
+				if isinstance(line, ast.Return):
+					reach = False
+
+				elif isinstance(line, ast.If) or isinstance(line, ast.While):
 					op_type, node = branch_dist(line.test)
-					new_branch = branch(parent, op_type, line.lineno)
+					new_branch = branch(parent, op_type, line.lineno, reach)
 
 					# Assign branch distance to temporary variable
 					body.insert(ind, ast.Assign(targets=[ast.Name(id=temp_name)],
@@ -115,19 +122,16 @@ def find_if(body, parent, temp_name, file_name):
 
 					# Print branch_id, op_type, branch distance in order
 					body.insert(ind + 1, ast.Expr(value=ast.Call(func=ast.Attribute(value=ast.Name(id=file_name),
-																					attr='write'),
-													args=[ast.Call(func=ast.Attribute(value=ast.Str(s='{} {} {}\n'),
-																						attr='format'),
-																	args=[ast.Num(n=new_branch.ind),
-																			ast.Num(n=op_type),
-																			ast.Name(id=temp_name)],
-																	keywords=[],
-																	starargs=None,
-																	kwargs=None)],
-													keywords=[],
-													starargs=None,
-													kwargs=None)))
-					
+																				attr='write'),
+																				args=[ast.Call(func=ast.Attribute(value=ast.Str(s='{} {} {}\n'),
+																												attr='format'),
+																							args=[ast.Num(n=new_branch.ind), ast.Num(n=op_type), ast.Name(id=temp_name)],
+																							keywords=[],
+																							starargs=None,
+																							kwargs=None)],
+																				keywords=[],
+																				starargs=None,
+																				kwargs=None)))
 
 					line.test.left = ast.Name(id=temp_name)
 					line.test.comparators = [ast.Num(n=0)]
@@ -141,12 +145,12 @@ def find_if(body, parent, temp_name, file_name):
 						line.body.append(body[ind])
 						line.body.append(body[ind + 1])
 
-					find_if(line.body, new_branch.ind, temp_name, file_name)
-					find_if(line.orelse, -new_branch.ind, temp_name, file_name)
+					find_if(line.body, new_branch.ind, temp_name, file_name, reach)
+					find_if(line.orelse, -new_branch.ind, temp_name, file_name, reach)
 					
 					ind += 2
 
 				else:
-					find_if(line, parent, temp_name, file_name)
+					find_if(line, parent, temp_name, file_name, reach)
 
 				ind += 1
