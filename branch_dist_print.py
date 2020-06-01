@@ -1,21 +1,21 @@
-def test_me(ffffff, x):
-    z = 0
-    tttttt = abs(x - 2)
-    ffffff.write('{} {} {}\n'.format(1, 0, tttttt))
-    if x == 2:
-        print '1'
-        return z
-    for i in range(x):
-        print '2'
-        z += 1
+from test import same
+
+
+def func(a, b, c):
+    a = a if a > 0 else a
+    if f(a) <= 0:
+        if same(b) < 0:
+            return 2
+        return 1
+    elif b >= 0:
+        if c < 0:
+            return 1, 2
+
+
+def f(fffff, a):
+    ttttt = a - 0
+    fffff.write('{} {} {}\n'.format(1, 1, ttttt))
+    if ttttt < 0:
+        return -a
     else:
-        print '3'
-        tttttt = abs(z - 0)
-        ffffff.write('{} {} {}\n'.format(2, 0, tttttt))
-        if z == 0:
-            print '4'
-            return x
-        while z > 0:
-            print '5'
-            z -= 1
-    return z
+        return a

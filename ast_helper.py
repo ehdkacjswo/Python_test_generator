@@ -6,9 +6,6 @@ def find_num(node):
 	if isinstance(node, ast.Num):
 		return [node.n]
 	
-	if isinstance(node, ast.Return):
-		return []
-	
 	rt = []
 
 	try:
@@ -39,7 +36,7 @@ def name_len(node):
     return rt
 
 # Get branch distance for given if statement
-# 0(==), 1(<), 2(<=, >=), 3(<. >)
+# 0(Eq, LtE, GtE), 1(NotEq, Lt, Gt)
 def branch_dist(test):
 	if isinstance(test.ops[0], ast.Eq):
 		return 0, ast.Call(func=ast.Name(id='abs'),
@@ -58,16 +55,16 @@ def branch_dist(test):
 													kwargs=None))
 	
 	elif isinstance(test.ops[0], ast.Lt):
-		return 3, ast.BinOp(left=test.left, op=ast.Sub(), right=test.comparators[0])
+		return 1, ast.BinOp(left=test.left, op=ast.Sub(), right=test.comparators[0])
 
 	elif isinstance(test.ops[0], ast.LtE):
-		return 2, ast.BinOp(left=test.left, op=ast.Sub(), right=test.comparators[0])
+		return 0, ast.BinOp(left=test.left, op=ast.Sub(), right=test.comparators[0])
 	
 	elif isinstance(test.ops[0], ast.Gt):
-		return 3, ast.BinOp(left=test.comparators[0], op=ast.Sub(), right=test.left)
+		return 1, ast.BinOp(left=test.comparators[0], op=ast.Sub(), right=test.left)
 
 	elif isinstance(test.ops[0], ast.GtE):
-		return 2, ast.BinOp(left=test.comparators[0], op=ast.Sub(), right=test.left)
+		return 0, ast.BinOp(left=test.comparators[0], op=ast.Sub(), right=test.left)
 
 
 class branch:
@@ -98,10 +95,8 @@ class branch:
 # Find branch of code from function body ast
 def find_if(body, parent, temp_name, file_name):
 	try:
-		if 'body' in body.__dict__:
-			find_if(body.body, parent, temp_name, file_name)
-		if 'orelse' in body.__dict__:
-			find_if(body.orelse, parent, temp_name, file_name)
+		for field in body._fields:
+			find_if(getattr(body, field), parent, temp_name, file_name)
 
 	except AttributeError:
 		if isinstance(body, list):
@@ -110,7 +105,7 @@ def find_if(body, parent, temp_name, file_name):
 			while ind in range(len(body)):
 				line = body[ind]
 
-				if isinstance(line, ast.If):
+				if isinstance(line, ast.If) or isinstance(line, ast.While):
 					op_type, node = branch_dist(line.test)
 					new_branch = branch(parent, op_type, line.lineno)
 
@@ -133,22 +128,25 @@ def find_if(body, parent, temp_name, file_name):
 													starargs=None,
 													kwargs=None)))
 					
+
+					line.test.left = ast.Name(id=temp_name)
+					line.test.comparators = [ast.Num(n=0)]
+
+					if op_type == 0:
+						line.test.ops = [ast.LtE()]
+					else:
+						line.test.ops = [ast.Lt()]
+					
+					if isinstance(line, ast.While):
+						line.body.append(body[ind])
+						line.body.append(body[ind + 1])
+
 					find_if(line.body, new_branch.ind, temp_name, file_name)
 					find_if(line.orelse, -new_branch.ind, temp_name, file_name)
-
-					'''# If branch is empty, no reason to consider it
-					if line.body:
-						find_if(line.body, new_branch.ind, temp_name, file_name)
-					else:
-						new_branch.true = True
-
-					if line.orelse:
-						find_if(line.orelse, -new_branch.ind, temp_name, file_name)
-					else:
-						new_branch.false = True'''
 					
 					ind += 2
 
 				else:
 					find_if(line, parent, temp_name, file_name)
+
 				ind += 1

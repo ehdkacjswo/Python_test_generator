@@ -26,7 +26,7 @@ def gen_input(func):
 
 # Analyze the fitness output
 def get_result(leaf_index):
-	f = open("fitness", "r")
+	f = open(file_name, "r")
 	br_data = f.readlines()
 	f.close()
 
@@ -38,8 +38,8 @@ def get_result(leaf_index):
 	for data in br_data:
 		br_id, br_type, br_dist = [int(x) for x in data.split(" ")]
 		
-		# When branch is passed, make fitness negative
-		if (br_type % 2 == 0 and br_dist <= 0) or (br_type % 2 == 1 and br_dist < 0):
+		# When branch is passed, make fitness negative(-1)
+		if (br_type == 0 and br_dist <= 0) or (br_type == 1 and br_dist < 0):
 			new_data = [(br_id, -1), (-br_id, -br_dist)]
 		else:
 			new_data = [(br_id, br_dist), (-br_id, -1)]
@@ -52,7 +52,7 @@ def get_result(leaf_index):
 		
 	br_fit = {}
 
-	# 
+	# For each leaves, find fitness
 	for leaf_ind, lvl_dict in leaf_index.items():
 		for ind, lvl in sorted(lvl_dict.items(), key=lambda tup: tup[1]):
 			dist = br_dict.get(ind)
@@ -65,11 +65,17 @@ def get_result(leaf_index):
 				if dist < 0:
 					if lvl == 0:
 						br_fit[leaf_ind] = -1
-						break
+
+					# Parent passed but did not reach its child
 					else:
-						# Cannot reach
-						print('hello')
-	
+						br_fit[leaf_ind] = lvl + 1
+					
+					break
+		
+		# None itself or ancestors visited
+		if not leaf_ind in br_fit:
+			br_fit[leaf_ind] = len(lvl_dict) + 1
+
 	return br_fit
 
 # Helps to suppress print
@@ -94,21 +100,25 @@ def test_main(root_copy, body_ind):
 		return
 
 	func_name = func.name
-	out_res.write('Function found ({})\n'.format(func_name))
+	print('Function found ({})\n'.format(func_name))
+
+	if not func.args.args:
+		return
+
 	special, new_test = gen_input(func)
 
 	branch.br_list = [None]
 	find_if(func.body, 0, temp_name, file_name)
 	
 	func.args.args.insert(0, ast.Name(id=file_name))
-	out_res.write('{} branches found\n\n'.format(len(branch.br_list) - 1))
+	print('{} branches found'.format(len(branch.br_list) - 1))
 	
 	# No branches found
 	if len(branch.br_list) == 1:
 		return
 	
 	for cur_br in branch.br_list[1:]:
-		out_res.write('Branch #{} on line {}\n'.format(cur_br.ind, cur_br.lineno))
+		print('Branch #{} on line {}'.format(cur_br.ind, cur_br.lineno))
 
 	# Write changed code on new file
 	code = astor.to_source(root_copy)
@@ -146,13 +156,13 @@ def test_main(root_copy, body_ind):
 	output = {}
 
 	# Print leaf branches and init output
-	out_res.write('Leaf branches:')
+	print('\nLeaf branches:')
 
 	for leaf_ind in sorted(leaf_index.keys(), key=lambda ind: abs(ind) * 2 + (1 if ind < 0 else 0)):
-		out_res.write(' {}'.format(tf_br(leaf_ind)))
+		print('{} '.format(tf_br(leaf_ind))),
 		output[leaf_ind] = []
 	
-	out_res.write('\n\n')
+	print('\n')
 	
 	import branch_dist_print
 	method = getattr(branch_dist_print, func_name)
@@ -161,12 +171,16 @@ def test_main(root_copy, body_ind):
 	rt_test = {}
 	sol_found = False
 
+	mid_gen = {int(math.floor(gen * i * 0.1)): i for i in range(1, 11)}
+
 	for i in range(gen):
+		if i in mid_gen:
+			print('{}0% generation processed'.format(mid_gen[i]))
+
 		new_output = []
-		print(i, leaf_index.keys())
 
 		for inp in new_test:
-			f = open('fitness', 'w')
+			f = open(file_name, 'w')
 			with HiddenPrint():
 				method(f, *inp)
 			f.close()
@@ -175,13 +189,13 @@ def test_main(root_copy, body_ind):
 				
 			# Check whether the solution is found
 			for leaf_ind in leaf_index:
+				# When the test is found for leaf
 				if new_output[-1][1][leaf_ind] < 0:
 					rt_test[leaf_ind] = copy.deepcopy(inp)
 					del leaf_index[leaf_ind]
-					out_res.write('Test case for {} is found on {}th gen\n'.format(tf_br(leaf_ind), i + 1))
 					
 					if not bool(leaf_index):
-						out_res.write('Every tests ares found!\n')
+						print('Every tests ares found!\n')
 						sol_found = True
 					break
 
@@ -197,7 +211,6 @@ def test_main(root_copy, body_ind):
 		for leaf_ind in leaf_index:
 			output[leaf_ind].extend(new_output)
 			output[leaf_ind] = sorted(output[leaf_ind], key=lambda data: data[1][leaf_ind])[:p]
-			print(leaf_ind, [(out[0], out[1][leaf_ind]) for out in output[leaf_ind]])
 
 			while len(new_test) - last_test_num < p:
 				pair = []
@@ -226,13 +239,17 @@ def test_main(root_copy, body_ind):
 
 					children.append(pair[0][0][:cross_point] + pair[1][0][cross_point:])
 					children.append(pair[1][0][:cross_point] + pair[0][0][cross_point:])
+
+				else:
+					children.append(mutate(pair[0][0], special, 1.0))
+					children.append(mutate(pair[1][0], special, 1.0))
 			
 				if score1 != score2:
 					children.append([int(math.ceil((pair[0][0][k] * (score2 + 1) - pair[1][0][k] * (score1 + 1)) / (score2 - score1))) for k in range(len(pair[0][0]))])
 
 				for child in children:
 					if rand.random() < 0.2 or child == pair[0][0] or child == pair[1][0]:
-						child = mutate(child, special)
+						child = mutate(child, special, 0.2)
 
 					if not in_test([out[0] for out in output[leaf_ind]], child):
 						new_test = add_test(new_test, child)
@@ -251,12 +268,19 @@ if __name__ == "__main__":
 	file_name = 'f' * var_len
 	temp_name = 't' * var_len
 	
-	out_res = open('branch_test', 'w')
+	out_res = open('report', 'w')
 
-	p = 10
+	# Size of population
+	p = 100
+	save_p = math.floor(p * 10)
+	
 	pm = 0.2
 	gen = 1000
 	
 	for ind in range(len(root.body)):
-		test_main(copy.deepcopy(root), ind)
+		test = test_main(copy.deepcopy(root), ind)
+
+	if os.path.exists(file_name):
+		os.remove(file_name)
 	
+	out_res.close()

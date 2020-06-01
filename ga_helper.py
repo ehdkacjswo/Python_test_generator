@@ -1,5 +1,5 @@
-import numpy as np
 import random as rand
+import math
 
 # Check whether new test is in the given test_list
 def in_test(test_list, new_test):
@@ -17,25 +17,25 @@ def add_test(test_list, new_test):
 	return test_list + [new_test]
 
 # Mutate given input
-def mutate(test, special):
+def mutate(test, special, pm):
 	same = 0
 
 	for ind in range(len(test)):
 		prob = rand.random()
-		if prob <= 0.05:
-			test[ind] -= 1
-
-		elif prob <= 0.1:
-			test[ind] += 1
-
-		elif prob <= 0.2:
+		if prob <= pm / 4:
 			test[ind] = rand.choice(special)
+
+		elif prob <= pm:
+			add = int(math.floor(rand.gammavariate(1, 1))) + 1
+			sign = rand.choice([-1, 1])
+
+			test[ind] += sign * add
 
 		else:
 			same += 1
 	
 	# If none is changed, muteate again
 	if same == len(test):
-		return mutate(test, special)
+		return mutate(test, special, pm)
 	
 	return test
